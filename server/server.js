@@ -9,7 +9,9 @@ process.on('uncaughtException', (err) => {
     process.exit(1);
 });
 
-// connectDatabase();
+if (process.env.MONGO_URI) {
+    connectDatabase();
+}
 
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_NAME,

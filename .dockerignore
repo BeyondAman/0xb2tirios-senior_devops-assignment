@@ -1,0 +1,15 @@
+node_modules
+.git
+.gitignore
+*.log
+.env
+.env.*
+!.env.example
+README.md
+assignment.md
+.github
+**/__tests__
+**/*.test.js
+**/*.test.jsx
+**/*.spec.js
+**/*.spec.jsx

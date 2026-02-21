@@ -1,29 +1,81 @@
 # BestCity
 
-## What is BestCity?
+**BestCity** is a real estate investment platform with React frontend and Node/Express backend, used here for the Senior DevOps assignment (containerization, Compose, CI).
 
-**BestCity** is a modern real estate investment platform that combines traditional property investing with cryptocurrency payments. Built with React and Tailwind CSS, it mirrors the functionality of Arrived.com while adding blockchain-based transaction capabilities.
+---
 
-<img src="./public/bestcity00.png" alt="Best City" style="width:100%; height:auto;" />
+## Assignment Summary & Deliverables
 
-## Key Features
+### Task 1 — Containerize the Application
 
-- Cryptocurrency-enabled property transactions
-- Mobile-responsive design
-- SEO-optimized architecture
-- Real-time market data integration
-- Interactive 3D property visualization
-- Smart contract integration for secure transactions
+**Done:** A production Dockerfile builds the React frontend and runs the Node backend in one image.
 
-## Technical Overview
+- **Build stage:** `npm ci --ignore-scripts`, then `npm run build` (React).
+- **Runtime stage:** Node 20 Alpine, production deps only, non-root user `appuser`, Express serves the built frontend via `express.static` from `frontend/build`.
+- **Build and run:**
+  ```bash
+  docker build -t bestcity .
+  docker run -p 3099:3099 bestcity
+  ```
+- **Verify:** Open http://localhost:3099 — app should load and respond.
 
-The platform is built using:
+---
 
-- React for component-based architecture
-- Tailwind CSS for responsive styling
-- React Router for client-side routing
-- Three.js for 3D property visualizations
-- Web3.js for blockchain interactions
+### Task 2 — Local Development with Docker Compose
+
+**Done:** One-command stack: app + MongoDB, env vars via compose (and optional `.env`).
+
+- **Files:** `docker-compose.yml` (app + MongoDB), optional `docker-compose.override.yml.example` for dev overrides.
+- **Env:** `MONGO_URI`, `PORT` set in compose; default `MONGO_URI=mongodb://mongodb:27017/bestcity`. Copy `.env.docker.example` to `.env` to override.
+- **Start:** `docker-compose up`  
+- **Stop:** `docker-compose down`  
+- Backend connects to MongoDB when both services are up (app `depends_on` mongodb).
+
+---
+
+### Task 3 — CI Pipeline for Build and Test
+
+**Done:** GitHub Actions workflow in `.github/workflows/ci.yml`.
+
+- **Triggers:** Push to `main`, and pull requests targeting `main`.
+- **Node:** 20 (aligned with project).
+- **Steps:** Checkout → `npm ci --ignore-scripts` → `npm run lint` → `npm run test:ci` → `npm run build`. Job fails if any step fails.
+- **Scripts:** `lint` and `test:ci` added in `package.json`; `test:ci` runs Jest with `--watchAll=false --passWithNoTests`.
+- **Run the same locally:**
+  ```bash
+  npm ci --ignore-scripts   # or npm ci if you prefer
+  npm run lint
+  npm run test:ci
+  npm run build
+  ```
+
+---
+
+## Improvements (Recommended Next Steps)
+
+- **CI lifecycle alerts**  
+  Notify on success/failure (e.g. Slack, email, GitHub commit status). Use a step at the end of the workflow to call a webhook or Slack Incoming Webhook when the job fails (or on success for deploy jobs). Reduces time to notice broken main.
+
+- **Multi-environment CI (dev, staging, prod)**  
+  - **Dev:** Run full CI (lint, test, build) on every push to feature branches and on PRs; optionally deploy to a dev environment on merge to `develop` or on PR label.  
+  - **Staging:** On merge to `main`, run the same CI, then deploy the built artifact to staging (e.g. push image to registry, deploy to staging cluster).  
+  - **Prod:** On tag (e.g. `v*`) or manual approval, run CI (or reuse staging build), then promote to production with approval gates and rollback plan.
+
+- **Automated promotion model**  
+  - Feature/tag branches → CI on every push/PR; optional deploy to **dev** when branch is pushed or when PR is merged to a “dev” branch.  
+  - Merge to **main** → CI must pass, then auto-deploy to **staging**.  
+  - **Production** → Triggered by release tag (e.g. `v1.0.0`) or by manual workflow_dispatch with approval; deploy only after staging validation.
+
+- **Security and quality**  
+  Add a job or step for: `npm audit` (or `npm audit --audit-level=high`), SAST (e.g. CodeQL), and optionally dependency scanning (e.g. Dependabot). Block merge or deploy on critical/high findings.
+
+- **Build artifacts and caching**  
+  Cache `node_modules` (or use `actions/cache` with `npm ci`). For deployment, build the Docker image in CI, push to a container registry (e.g. GHCR), and use that image for dev/staging/prod so every env runs the same artifact.
+
+- **Environment and secrets**  
+  Use GitHub Environments (e.g. `staging`, `production`) with protection rules and secrets per env. Never log secrets; use short-lived tokens where possible.
+
+---
 
 ## How to Run the Project
 

@@ -1,0 +1,19 @@
+# Optional: copy to docker-compose.override.yml for local dev
+# Use: docker-compose up (override is auto-applied)
+#
+# Example dev overrides:
+# - Mount source for hot reload (requires nodemon or similar in Dockerfile.dev)
+# - Different ports (e.g. 3098:3099)
+# - Extra env (e.g. NODE_ENV=development)
+
+# version not needed in override (inherited)
+# services:
+#   app:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.dev
+#     environment:
+#       NODE_ENV: development
+#     volumes:
+#       - .:/app
+#       - /app/node_modules  # prevent host node_modules overwriting container
