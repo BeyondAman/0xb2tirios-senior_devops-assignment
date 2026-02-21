@@ -27,8 +27,8 @@
 
 - **Files:** `docker-compose.yml` (app + MongoDB), optional `docker-compose.override.yml.example` for dev overrides.
 - **Env:** `MONGO_URI`, `PORT` set in compose; default `MONGO_URI=mongodb://mongodb:27017/bestcity`. Copy `.env.docker.example` to `.env` to override.
-- **Start:** `docker-compose up`  
-- **Stop:** `docker-compose down`  
+- **Start:** `docker compose up` (or `docker compose up --build` to rebuild)  
+- **Stop:** `docker compose down`  
 - Backend connects to MongoDB when both services are up (app `depends_on` mongodb).
 
 ---
@@ -41,13 +41,69 @@
 - **Node:** 20 (aligned with project).
 - **Steps:** Checkout → `npm ci --ignore-scripts` → `npm run lint` → `npm run test:ci` → `npm run build`. Job fails if any step fails.
 - **Scripts:** `lint` and `test:ci` added in `package.json`; `test:ci` runs Jest with `--watchAll=false --passWithNoTests`.
+- **Security audit:** `npm audit --audit-level=high` runs as a CI step. Currently non-blocking (`|| true`) due to upstream dependency vulnerabilities; can be made blocking once dependencies are upgraded.
 - **Run the same locally:**
   ```bash
-  npm ci --ignore-scripts   # or npm ci if you prefer
+  npm ci --ignore-scripts
   npm run lint
   npm run test:ci
+  npm audit --audit-level=high
   npm run build
   ```
+
+#### How I'd Add Deployment Steps
+
+Add a `deploy` job that runs **after** `build-and-test` succeeds. Example flow:
+
+1. **Build and push Docker image** — After the build job passes, build the Docker image in CI and push it to a container registry (e.g. GitHub Container Registry, ECR, Docker Hub).
+2. **Deploy to staging** — Use a deployment action or SSH/kubectl step to pull the new image and deploy to staging. Gate this on merge to `main`.
+3. **Deploy to production** — Trigger on release tags (`v*`) or via `workflow_dispatch` with manual approval using GitHub Environments protection rules.
+
+```yaml
+# Example deploy job (would be added to ci.yml)
+deploy:
+  needs: build-and-test
+  if: github.ref == 'refs/heads/main'
+  runs-on: ubuntu-latest
+  environment: staging          # GitHub Environment with protection rules
+  steps:
+    - name: Login to registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Build and push image
+      run: |
+        docker build -t ghcr.io/${{ github.repository }}:${{ github.sha }} .
+        docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
+    - name: Deploy to staging
+      run: echo "Deploy image to staging cluster/server here"
+```
+
+#### How I'd Add Security Checks
+
+| Check | Tool | Where |
+|---|---|---|
+| Dependency vulnerabilities | `npm audit --audit-level=high` | Already in CI (step 5) |
+| Static analysis (SAST) | GitHub CodeQL | Add as a separate workflow or job |
+| Secret scanning | GitHub Secret Scanning | Enable in repo settings (free for public repos) |
+| Container image scanning | Trivy or Docker Scout | Add after Docker image build step |
+| Dependency updates | Dependabot | Add `.github/dependabot.yml` |
+
+```yaml
+# Example: CodeQL (separate workflow or added as a job)
+security:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - uses: github/codeql-action/init@v3
+      with:
+        languages: javascript
+    - uses: github/codeql-action/analyze@v3
+```
+
+These checks would block PRs from merging if critical/high issues are found, keeping `main` clean.
 
 ---
 
